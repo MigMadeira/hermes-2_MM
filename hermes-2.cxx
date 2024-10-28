@@ -564,7 +564,6 @@ int Hermes::init(bool restarting) {
   OPTION(optsc, anomalous_D_pepi, true);
 
   // Flux limiters
-  OPTION(optsc, flux_limit_alpha, -1);
   OPTION(optsc, kappa_limit_alpha, -1);
   OPTION(optsc, eta_limit_alpha, -1);
 
@@ -2147,7 +2146,8 @@ int Hermes::rhs(BoutReal t) {
        Field3D one;
        set_all(one, 1.0);
        Field3D denom = one + abs(div_all(q_SH,q_fl));
-       
+       //d = denom;
+
        denom.applyBoundary("neumann");
        mesh->communicate(denom);
        denom.applyParallelBoundary(parbc);
@@ -2215,7 +2215,7 @@ int Hermes::rhs(BoutReal t) {
     ddt(Ne) = SETNAME(-Div_n_bxGrad_f_B_XPPM(Ne, phi, ne_bndry_flux,
                                              poloidal_flows, true,
                                              bracket_factor)); // ExB drift
-    // a += -Div_n_bxGrad_f_B_XPPM(Ne, phi, ne_bndry_flux, poloidal_flows,
+    // a = -Div_n_bxGrad_f_B_XPPM(Ne, phi, ne_bndry_flux, poloidal_flows,
     //                                      true) * bracket_factor; // ExB drift
   } else {
     ddt(Ne) = 0.0;
@@ -2246,6 +2246,7 @@ int Hermes::rhs(BoutReal t) {
       Field3D nevi = mul_all(Ne, Vi);
       check_all(nevi);
       ddt(Ne) -= SETNAME(Div_parP(nevi));
+      a = -Div_parP(nevi);
     }
 
     //Skew-symmetric form
@@ -2324,6 +2325,7 @@ int Hermes::rhs(BoutReal t) {
   }
   if (anomalous_D > 0.0) {
     ddt(Ne) += SETNAME(FCIDiv_a_Grad_perp(a_d3d, Ne));
+    b = FCIDiv_a_Grad_perp(a_d3d, Ne);
   }
 
   // Source
@@ -2780,6 +2782,7 @@ int Hermes::rhs(BoutReal t) {
     if (thermal_conduction) {
       check_all(kappa_epar);
       ddt(Pe) += SETNAME((2. / 3) * Div_par_K_Grad_par(kappa_epar, Te));
+      //a = (2. / 3) * Div_par_K_Grad_par(kappa_epar, Te);
     }
 
     if (thermal_flux) {
@@ -2820,9 +2823,8 @@ int Hermes::rhs(BoutReal t) {
                            Ne.ynext(bndry_par->dir)(x, y + bndry_par->dir, z)),
                     0.0);
           BoutReal vesheath =
-              floor(0.5 * (Ve(x, y, z) +
-                           Ve.ynext(bndry_par->dir)(x, y + bndry_par->dir, z)),
-                    0.0);
+              0.5 * (Ve(x, y, z) +
+                           Ve.ynext(bndry_par->dir)(x, y + bndry_par->dir, z));
           // BoutReal tisheath = floor(
           //                               0.5 * (Ti(x, y, z) +
           // Ti.ynext(bndry_par->dir)(x, y + bndry_par->dir, z)),
@@ -2832,8 +2834,8 @@ int Hermes::rhs(BoutReal t) {
           // BoutReal Cs =bndry_par->dir* sqrt(tesheath + tisheath);
 
           // Heat flux
-          BoutReal q = (sheath_gamma_e - 1.5) * tesheath * nesheath * vesheath *
-                       bndry_par->dir;
+          BoutReal q = floor((sheath_gamma_e - 1.5) * tesheath * nesheath * vesheath *
+                       bndry_par->dir, 0.0);
           // Multiply by cell area to get power
           BoutReal flux = q * coord->J(x, y, z) / sqrt(coord->g_22(x, y, z));
 
@@ -3018,6 +3020,7 @@ int Hermes::rhs(BoutReal t) {
     // Parallel heat conduction
     if (thermal_conduction) {
       ddt(Pi) += (2. / 3) * SETNAME(Div_par_K_Grad_par(kappa_ipar, Ti));
+      //b = (2. / 3) * Div_par_K_Grad_par(kappa_epar, Te);
     }
 
     // Parallel pressure gradients (sound waves)
@@ -3663,7 +3666,7 @@ Field3D Hermes::Grad_parP(const Field3D &f) {
 }
 
 Field3D Hermes::Div_parP(const Field3D &f) {
-  return Div_par(f);
+  //return Div_par(f);
   auto* coords = mesh->getCoordinates();
   Field3D result;
   result.allocate();
